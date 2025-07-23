@@ -57,26 +57,35 @@ Database: MySQL
 
 📁 Project Structure
 
+<pre>
+
 Eventify/
 ├── backend/ (Spring Boot)
-│   ├── src/main/java/com/example/demo
-│   │   ├── controller
-│   │   ├── dto
-│   │   ├── jwt
-│   │   ├── model
-│   │   ├── repository
-│   │   └── service
-│   ├── resources
-│   │   └── application.properties
-│   └── schema.sql
-└── frontend/ (React + Vite)
-    ├── public/
-    ├── src/
-    │   ├── pages/
-    │   ├── assets/
-    │   ├── AppRoutes.jsx
-    │   └── main.jsx
-    └── index.html
+│   ├── src/
+│   │   └── main/java/com/example/demo/
+│   │       ├── controller/
+│   │       ├── dto/
+│   │       ├── jwt/
+│   │       ├── model/
+│   │       ├── repository/
+│   │       └── service/
+│   ├── resources/
+│   │   ├── application.properties
+│   │   └── schema.sql
+│   └── pom.xml
+│
+├── frontend/ (React + Vite)
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/          ← CSS, images
+│   │   ├── pages/           ← All page components
+│   │   ├── AppRoutes.jsx
+│   │   └── main.jsx
+│   └── index.html
+
+</pre>
+
+Let me know if you want separate structures for backend and frontend with descriptions!
 
 ⚙️ Backend Setup (Spring Boot)
 
