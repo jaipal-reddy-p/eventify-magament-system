@@ -1,0 +1,63 @@
+package com.example.demo.service;
+
+import com.example.demo.model.Ticket;
+import com.example.demo.repository.TicketRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+/**
+ * Service layer that contains business logic for managing ticket operations:
+ * - Booking
+ * - Retrieving by user or event
+ * - Cancellation
+ */
+@Service
+public class TicketService {
+
+    @Autowired
+    private TicketRepository ticketRepo;
+
+    /**
+     * Books a new ticket by:
+     * - Setting its status to "BOOKED"
+     * - Persisting it into the database
+     *
+     * @param ticket Ticket object to be booked
+     * @return The saved ticket object
+     */
+    public Ticket bookTicket(Ticket ticket) {
+        ticket.setStatus("BOOKED");
+        return ticketRepo.save(ticket);
+    }
+
+    /**
+     * Retrieves all tickets booked by a specific user.
+     *
+     * @param userId ID of the user
+     * @return List of tickets associated with the user
+     */
+    public List<Ticket> getTicketsByUser(Long userId) {
+        return ticketRepo.findByUserId(userId);
+    }
+
+    /**
+     * Retrieves all tickets associated with a particular event.
+     *
+     * @param eventId ID of the event
+     * @return List of tickets associated with the event
+     */
+    public List<Ticket> getTicketsByEvent(Long eventId) {
+        return ticketRepo.findByEventId(eventId);
+    }
+
+    /**
+     * Cancels a ticket by removing it from the database.
+     *
+     * @param ticketId ID of the ticket to be cancelled
+     */
+    public void cancelTicket(Long ticketId) {
+        ticketRepo.deleteById(ticketId);
+    }
+}

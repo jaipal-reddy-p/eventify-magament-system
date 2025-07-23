@@ -1,0 +1,55 @@
+package com.example.demo.controller;
+
+import com.example.demo.model.Ticket;
+import com.example.demo.service.TicketService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/tickets")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
+public class TicketController {
+
+    @Autowired
+    private TicketService ticketService;
+
+    /**
+     * Allows a USER to book a ticket for an event.
+     */
+    @PostMapping("/book")
+    public ResponseEntity<Ticket> bookTicket(@RequestBody Ticket ticket) {
+        Ticket booked = ticketService.bookTicket(ticket);
+        return ResponseEntity.ok(booked);
+    }
+
+    /**
+     * Retrieves all tickets booked by a specific user.
+     * Useful for user ticket dashboard.
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<Ticket>> getByUser(@PathVariable Long userId) {
+        List<Ticket> tickets = ticketService.getTicketsByUser(userId);
+        return ResponseEntity.ok(tickets);
+    }
+
+    /**
+     * Organizer/Admin view all tickets booked for a specific event.
+     */
+    @GetMapping("/event/{eventId}")
+    public ResponseEntity<List<Ticket>> getByEvent(@PathVariable Long eventId) {
+        List<Ticket> tickets = ticketService.getTicketsByEvent(eventId);
+        return ResponseEntity.ok(tickets);
+    }
+
+    /**
+     * Cancels a ticket by ID.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> cancel(@PathVariable Long id) {
+        ticketService.cancelTicket(id);
+        return ResponseEntity.ok("Ticket cancelled");
+    }
+}

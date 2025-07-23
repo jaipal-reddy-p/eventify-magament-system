@@ -1,0 +1,74 @@
+package com.example.demo.controller;
+
+import com.example.demo.model.Ticket;
+import com.example.demo.service.TicketService;
+import com.example.demo.service.UserService;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * REST controller for managing ticket-related operations.
+ */
+@RestController
+@RequestMapping("/api/tickets")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true") // Update in production
+public class TicketController {
+
+    @Autowired
+    private TicketService ticketService;
+    @Autowired
+    private UserService userService;
+
+    /**
+     * Allows a USER to book a ticket for an event.
+     * 
+     * @param ticket Ticket object containing event & user info
+     * @return Booked Ticket
+     */
+    @PostMapping("/book")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<Ticket> bookTicket(@RequestBody Ticket ticket) {
+        Ticket booked = ticketService.bookTicket(ticket);
+        return ResponseEntity.ok(booked);
+    }
+
+    /**
+     * Retrieves all tickets booked by a specific user.
+     * 
+     * @param userId ID of the user
+     * @return List of tickets for that user
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<Ticket>> getByUser(@PathVariable Long userId) {
+        List<Ticket> tickets = ticketService.getTicketsByUser(userId);
+        return ResponseEntity.ok(tickets);
+    }
+
+    /**
+     * Retrieves all tickets for a specific event (Organizer/Admin view).
+     * 
+     * @param eventId ID of the event
+     * @return List of booked tickets
+     */
+    @GetMapping("/event/{eventId}")
+    public ResponseEntity<List<Ticket>> getByEvent(@PathVariable Long eventId) {
+        List<Ticket> tickets = ticketService.getTicketsByEvent(eventId);
+        return ResponseEntity.ok(tickets);
+    }
+
+    /**
+     * Cancels a ticket by ID.
+     * 
+     * @param id Ticket ID
+     * @return Confirmation message
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> cancel(@PathVariable Long id) {
+        ticketService.cancelTicket(id);
+        return ResponseEntity.ok("Ticket cancelled");
+    }
+}

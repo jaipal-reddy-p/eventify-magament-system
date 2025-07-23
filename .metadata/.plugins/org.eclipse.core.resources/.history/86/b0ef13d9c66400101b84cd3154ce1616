@@ -1,0 +1,117 @@
+package com.example.demo.model;
+
+import jakarta.persistence.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+/**
+ * Entity representing an event created by an organizer.
+ * Includes basic event details and a reference to the user (organizer).
+ */
+@Entity
+@Table(name = "events")
+public class Event {
+
+    /**
+     * Primary key (auto-generated).
+     */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    /**
+     * Title of the event.
+     */
+    @Column(nullable = false)
+    private String title;
+
+    /**
+     * Description or summary of the event.
+     */
+    @Column(length = 1000)
+    private String description;
+
+    /**
+     * Date when the event is scheduled.
+     */
+    @Column(nullable = false)
+    private LocalDate date;
+
+    /**
+     * Time when the event is scheduled.
+     */
+    @Column(nullable = false)
+    private LocalTime time;
+
+    /**
+     * Location where the event will be held.
+     */
+    @Column(nullable = false)
+    private String location;
+
+    /**
+     * Organizer who created this event.
+     * Many events can belong to one organizer (User).
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "organizer_id", nullable = false)
+    private User organizer;
+
+    // --- Getters and Setters ---
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public LocalDate getDate() {
+        return date;
+    }
+
+    public void setDate(LocalDate date) {
+        this.date = date;
+    }
+
+    public LocalTime getTime() {
+        return time;
+    }
+
+    public void setTime(LocalTime time) {
+        this.time = time;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    public User getOrganizer() {
+        return organizer;
+    }
+
+    public void setOrganizer(User organizer) {
+        this.organizer = organizer;
+    }
+}

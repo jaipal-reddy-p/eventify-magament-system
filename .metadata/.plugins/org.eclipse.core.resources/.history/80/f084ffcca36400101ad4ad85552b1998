@@ -1,0 +1,153 @@
+package com.example.demo.jwt;
+
+import com.example.demo.model.User;
+import com.example.demo.repository.UserRepository;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
+
+/**
+ * Custom filter that runs once per request and validates JWT tokens.
+ * 
+ * - Extracts token from either Authorization header or cookie.
+ * - Validates token signature and expiration.
+ * - Loads user from DB and sets Spring Security context.
+ */
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final UserRepository userRepository;
+    private final Key signingKey;
+
+    /**
+     * Injects UserRepository and JWT secret for signing key.
+     *
+     * @param userRepository user repository to fetch user by email
+     * @param jwtSecret JWT secret key (must be at least 64 bytes)
+     */
+    public JwtAuthenticationFilter(UserRepository userRepository, @Value("${jwt.secret}") String jwtSecret) {
+        this.userRepository = userRepository;
+        this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Intercepts requests and validates JWT token from header/cookie.
+     * If valid, sets authentication context.
+     */
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String token = extractToken(request); // from header or cookie
+
+        if (token != null && validateToken(token)) {
+            String username = extractUsername(token);
+
+            Optional<User> optionalUser = userRepository.findByEmail(username);
+            if (optionalUser.isPresent()) {
+                User user = optionalUser.get();
+
+                // Create an authentication object without authorities
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(user, null, Collections.emptyList());
+
+                // Attach request details (IP, session ID, etc.)
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                // Set the security context so Spring knows the user is authenticated
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                // Optional: attach authenticated user to the request for downstream use
+                request.setAttribute("authenticatedUser", user);
+            }
+        }
+
+        // Continue the filter chain
+        filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Tries to extract the JWT token from Authorization header or cookies.
+     *
+     * @param request incoming HTTP request
+     * @return token string or null if not present
+     */
+    private String extractToken(HttpServletRequest request) {
+        // Check Authorization header first
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7); // Strip "Bearer "
+        }
+
+        // Fallback to cookie named "authToken"
+        if (request.getCookies() != null) {
+            return Arrays.stream(request.getCookies())
+                    .filter(cookie -> "authToken".equals(cookie.getName()))
+                    .map(Cookie::getValue)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        return null;
+    }
+
+    /**
+     * Validates JWT token using signature and expiration.
+     *
+     * @param token the JWT token string
+     * @return true if valid, false otherwise
+     */
+    private boolean validateToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(signingKey)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            // Token must not be expired
+            return claims.getExpiration().after(new java.util.Date());
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Extracts the email/subject (username) from the token.
+     *
+     * @param token JWT token
+     * @return email address stored in token subject
+     */
+    private String extractUsername(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .getSubject();
+    }
+}

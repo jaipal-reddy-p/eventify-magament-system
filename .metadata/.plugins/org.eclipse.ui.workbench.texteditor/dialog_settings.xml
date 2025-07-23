@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="java.lang.Class">
+		<item key="selection" value="public String generateToken(String email) {"/>
+		<list key="findhistory">
+			<item value="public String generateToken(String email) {"/>
+			<item value="@PostMapping(&quot;/login&quot;)"/>
+			<item value="public String register(User user) {"/>
+		</list>
+	</section>
+</section>

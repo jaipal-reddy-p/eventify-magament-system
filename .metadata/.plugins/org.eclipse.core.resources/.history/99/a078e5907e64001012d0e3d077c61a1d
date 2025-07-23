@@ -1,0 +1,20 @@
+package com.example.demo.service;
+
+import com.example.demo.model.Event;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+/**
+ * Repository interface for accessing event data from the database.
+ * Provides CRUD operations and custom query to fetch events by organizer.
+ */
+public interface EventRepository extends JpaRepository<Event, Long> {
+
+    /**
+     * Retrieves all events created by a specific organizer.
+     *
+     * @param id the organizer's user ID
+     * @return list of Event objects
+     */
+    List<Event> findByOrganizerId(Long id);
+}

@@ -1,0 +1,74 @@
+package com.example.demo.controller;
+
+import com.example.demo.model.Event;
+import com.example.demo.model.User;
+import com.example.demo.service.EventService;
+import com.example.demo.service.UserService;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
+import java.util.List;
+
+/**
+ * REST controller for managing event operations such as creation,
+ * listing, filtering by organizer, and deletion.
+ */
+@RestController
+@RequestMapping("/api/events")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true") // Adjust in production
+public class EventController {
+
+    @Autowired
+    private EventService eventService;
+
+    @Autowired
+    private UserService userService;
+
+    /**
+     * ✅ ORGANIZER ONLY: Creates a new event.
+     */
+    @PostMapping
+    @PreAuthorize("hasRole('ORGANIZER')") // Ensures user has ORGANIZER role from JWT
+    public ResponseEntity<Event> createEvent(@RequestBody Event event, Principal principal) {
+        // Extract email from authenticated JWT
+        String email = principal.getName();
+
+        // Load user from DB using email
+        User organizer = userService.getUserByEmail(email);
+        event.setOrganizer(organizer);
+
+        // Save event
+        Event created = eventService.createEvent(event);
+        return ResponseEntity.ok(created);
+    }
+
+    /**
+     * 🟢 Public: Get all events
+     */
+    @GetMapping
+    public List<Event> getAllEvents() {
+        return eventService.getAllEvents();
+    }
+
+    /**
+     * 🔍 Public: Get events by organizer ID
+     */
+    @GetMapping("/organizer/{id}")
+    public List<Event> getByOrganizer(@PathVariable Long id) {
+        return eventService.getEventsByOrganizerId(id);
+    }
+
+    /**
+     * ❌ ORGANIZER ONLY: Delete an event by ID
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<String> delete(@PathVariable Long id) {
+        eventService.deleteEvent(id);
+        return ResponseEntity.ok("Event deleted");
+    }
+}

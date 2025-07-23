@@ -1,0 +1,135 @@
+package com.example.demo.controller;
+
+import com.example.demo.model.User;
+import com.example.demo.service.AuthService;
+import com.example.demo.dto.LoginRequest;
+
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Controller handling authentication features: - Login with JWT cookie - Logout
+ * - OTP-based password reset
+ */
+@RestController
+@RequestMapping("/api/auth")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
+public class AuthController {
+
+	private final AuthService authService;
+
+	public AuthController(AuthService authService) {
+		this.authService = authService;
+	}
+
+	/**
+	 * Login with email and password. On success: generates JWT, stores it in
+	 * HttpOnly cookie.
+	 */
+	@PostMapping("/login")
+	public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
+		try {
+			User user = authService.authenticate(loginRequest.getEmail(), loginRequest.getPassword());
+			String token = authService.generateToken(user);
+
+			// Set token in secure cookie
+			Cookie cookie = new Cookie("authToken", token);
+			cookie.setHttpOnly(true);
+			cookie.setSecure(false); // Change to true in production (HTTPS)
+			cookie.setPath("/");
+			cookie.setMaxAge(3600);
+			response.addCookie(cookie);
+
+			// Prepare minimal user response
+			Map<String, Object> result = new HashMap<>();
+			result.put("message", "Login successful");
+			result.put("role", user.getRole());
+			result.put("name", user.getName());
+
+			return ResponseEntity.ok(result);
+		} catch (RuntimeException e) {
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
+		}
+	}
+	
+	/**
+	 * Registration of the user
+	 */
+	@PostMapping("/register")
+	public ResponseEntity<?> register(@RequestBody User user) {
+	    try {
+	        User registeredUser = authService.register(user);
+	        return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
+	    } catch (Exception e) {
+	        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+	    }
+	}
+
+	/**
+	 * Logout the user. Deletes JWT from DB and clears the cookie.
+	 */
+	@PostMapping("/logout")
+	public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
+		try {
+			User user = (User) request.getAttribute("authenticatedUser");
+			authService.logout(user);
+
+			// Clear auth cookie
+			Cookie cookie = new Cookie("authToken", null);
+			cookie.setMaxAge(0);
+			cookie.setPath("/");
+			response.addCookie(cookie);
+
+			return ResponseEntity.ok(Map.of("message", "Logout successful"));
+		} catch (Exception e) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Logout failed"));
+		}
+	}
+
+	/**
+	 * Sends OTP to the given email for password reset.
+	 */
+	@PostMapping("/forgot-password")
+	public ResponseEntity<String> sendOtp(@RequestParam String email) {
+		try {
+			authService.sendOtpToEmail(email);
+			return ResponseEntity.ok("OTP sent to your email.");
+		} catch (Exception e) {
+			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+		}
+	}
+
+	/**
+	 * Verifies OTP submitted by the user.
+	 */
+	@PostMapping("/verify-otp")
+	public ResponseEntity<String> verifyOtp(@RequestParam String otp) {
+		try {
+			boolean valid = authService.verifyOtp(otp);
+			return ResponseEntity.ok("OTP verified successfully.");
+		} catch (Exception e) {
+			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+		}
+	}
+
+	/**
+	 * Resets password for the user whose OTP was verified.
+	 */
+	@PostMapping("/reset-password")
+	public ResponseEntity<String> resetPassword(@RequestParam String newPassword) {
+		try {
+			authService.resetPassword(newPassword);
+			return ResponseEntity.ok("Password reset successfully.");
+		} catch (Exception e) {
+			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+		}
+	}
+}

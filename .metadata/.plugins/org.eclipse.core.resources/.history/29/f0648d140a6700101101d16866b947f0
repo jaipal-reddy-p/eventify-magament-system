@@ -1,0 +1,228 @@
+package com.example.demo.service;
+
+import com.example.demo.model.User;
+import com.example.demo.model.JWTToken;
+import com.example.demo.model.Otprequests;
+import com.example.demo.repository.JWTTokenRepository;
+import com.example.demo.repository.OtpRepository;
+import com.example.demo.repository.UserRepository;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.security.Key;
+import java.time.LocalDateTime;
+import java.util.Date;
+import java.util.Optional;
+import java.util.Random;
+
+/**
+ * Service layer for authentication and security-related operations:
+ * ✅ Login
+ * ✅ JWT generation/validation
+ * ✅ Logout
+ * ✅ OTP-based password reset
+ */
+@Service
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final JWTTokenRepository jwtTokenRepository;
+    private final OtpRepository otpRepository;
+    private final JavaMailSender mailSender;
+    private final Key signingKey;
+    private final BCryptPasswordEncoder passwordEncoder;
+
+    private String currentResetEmail; // Temporarily holds the email being reset
+
+    /**
+     * Constructs AuthService with required dependencies.
+     *
+     * @param jwtSecret A secure secret for signing JWTs (minimum 64 bytes)
+     */
+    public AuthService(
+            UserRepository userRepository,
+            JWTTokenRepository jwtTokenRepository,
+            OtpRepository otpRepository,
+            JavaMailSender mailSender,
+            @Value("${jwt.secret}") String jwtSecret) {
+
+        this.userRepository = userRepository;
+        this.jwtTokenRepository = jwtTokenRepository;
+        this.otpRepository = otpRepository;
+        this.mailSender = mailSender;
+        this.passwordEncoder = new BCryptPasswordEncoder();
+
+        if (jwtSecret.getBytes().length < 64) {
+            throw new IllegalArgumentException("JWT_SECRET must be at least 64 bytes");
+        }
+
+        this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    }
+
+    /**
+     * Validates login credentials using email and password.
+     *
+     * @param email    login email
+     * @param password plain password
+     * @return Authenticated user if valid, else throws
+     */
+    public User authenticate(String email, String password) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            throw new RuntimeException("Invalid email or password");
+        }
+
+        return user;
+    }
+
+    /**
+     * Generates and stores JWT token for authenticated user.
+     *
+     * @param user Authenticated user
+     * @return signed JWT token
+     */
+    public String generateToken(User user) {
+        String token = Jwts.builder()
+                .setSubject(user.getEmail())
+                .claim("role", user.getRole())
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 3600_000)) // 1 hour expiry
+                .signWith(signingKey, SignatureAlgorithm.HS512)
+                .compact();
+
+        JWTToken jwtToken = new JWTToken(user, token, LocalDateTime.now().plusHours(1));
+        jwtTokenRepository.save(jwtToken);
+        return token;
+    }
+
+    /**
+     * Logs out a user by deleting their JWT token from DB.
+     *
+     * @param user User to logout
+     */
+    public void logout(User user) {
+        jwtTokenRepository.deleteByUserId(user.getId().intValue());
+    }
+
+    /**
+     * Validates the JWT token's signature and expiration.
+     *
+     * @param token JWT string
+     * @return true if valid and not expired
+     */
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token);
+
+            Optional<JWTToken> jwtToken = jwtTokenRepository.findByToken(token);
+            return jwtToken.isPresent() && jwtToken.get().getExpiresAt().isAfter(LocalDateTime.now());
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Extracts the email (subject) from the JWT token.
+     *
+     * @param token JWT token
+     * @return email string
+     */
+    public String extractEmail(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .getSubject();
+    }
+
+    /**
+     * Sends a 6-digit OTP to the provided email address.
+     *
+     * @param email target email
+     */
+    public void sendOtpToEmail(String email) {
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) throw new IllegalArgumentException("Email not found");
+
+        String otp = generateOtp();
+        Otprequests request = new Otprequests(email, otp, LocalDateTime.now());
+        otpRepository.save(request);
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(email);
+        message.setSubject("Your OTP for password reset");
+        message.setText("OTP: " + otp);
+        mailSender.send(message);
+
+        this.currentResetEmail = email;
+    }
+
+    /**
+     * Verifies if the OTP is valid and not expired.
+     *
+     * @param otp OTP input
+     * @return true if valid within 10 mins
+     */
+    public boolean verifyOtp(String otp) {
+        Optional<Otprequests> request = otpRepository.findByOtp(otp);
+        if (request.isEmpty()) return false;
+
+        Otprequests validRequest = request.get();
+        boolean notExpired = validRequest.getCreatedAt().isAfter(LocalDateTime.now().minusMinutes(10));
+
+        if (notExpired) {
+            this.currentResetEmail = validRequest.getEmail();
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Resets the password for the email associated with last verified OTP.
+     *
+     * @param newPassword plain new password
+     */
+    public void resetPassword(String newPassword) {
+        if (this.currentResetEmail == null)
+            throw new IllegalStateException("OTP verification not done");
+
+        User user = userRepository.findByEmail(this.currentResetEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Email not found"));
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        otpRepository.deleteByEmail(this.currentResetEmail);
+        this.currentResetEmail = null;
+    }
+
+    /**
+     * Generates a 6-digit numeric OTP string.
+     *
+     * @return OTP string
+     */
+    private String generateOtp() {
+        return String.valueOf(new Random().nextInt(900_000) + 100_000);
+    }
+
+	public User register(User user) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}

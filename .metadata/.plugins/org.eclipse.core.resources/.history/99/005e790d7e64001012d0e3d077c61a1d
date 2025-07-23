@@ -1,0 +1,66 @@
+package com.example.demo.controller;
+
+import com.example.demo.dto.LoginRequest;
+import com.example.demo.dto.UserDTO;
+import com.example.demo.jwt.JwtUtils;
+import com.example.demo.model.User;
+import com.example.demo.service.UserService;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Controller for handling user registration and login.
+ */
+@RestController
+@RequestMapping("/api/users")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true") // Allow all origins for frontend testing (adjust in prod)
+public class UserController {
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    /**
+     * Registers a new user or organizer.
+     * Request Body: { name, email, password, role (optional) }
+     */
+    @PostMapping("/register")
+    public ResponseEntity<String> registerUser(@RequestBody User user) {
+        String response = userService.register(user);
+        if (response.contains("already")) {
+            return ResponseEntity.badRequest().body(response);
+        }
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Authenticates user and returns a JWT token along with basic user info.
+     * Request Body: { email, password }
+     * Response: { user: {id, name, email, role}, token: JWT }
+     */
+    @PostMapping("/login")
+    public ResponseEntity<?> loginUser(@RequestBody LoginRequest loginRequest) {
+        UserDTO user = userService.login(loginRequest.getEmail(), loginRequest.getPassword());
+
+        if (user == null) {
+            return ResponseEntity.status(401).body("Invalid credentials");
+        }
+
+        // 🔐 Generate JWT with role
+        String token = jwtUtils.generateToken(user.getEmail(), user.getRole());
+
+        // ✅ Return user info + token
+        Map<String, Object> response = new HashMap<>();
+        response.put("user", user);
+        response.put("token", token);
+
+        return ResponseEntity.ok(response);
+    }
+}

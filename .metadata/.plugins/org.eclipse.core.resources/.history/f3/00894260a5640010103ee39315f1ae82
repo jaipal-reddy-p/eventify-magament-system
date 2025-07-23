@@ -1,0 +1,82 @@
+package com.example.demo.controller;
+
+import com.example.demo.model.Event;
+import com.example.demo.model.User;
+import com.example.demo.service.EventService;
+import com.example.demo.service.UserService;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
+import java.util.List;
+
+/**
+ * REST controller for managing event operations such as creation,
+ * listing, filtering by organizer, and deletion.
+ */
+@RestController
+@RequestMapping("/api/events")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true") // Update for production
+public class EventController {
+
+    @Autowired
+    private EventService eventService;
+
+    @Autowired
+    private UserService userService;
+
+    /**
+     * Creates a new event by an authenticated organizer.
+     * 
+     * @param event     Event details from the request body
+     * @param principal Authenticated user's info (email)
+     * @return Created Event
+     */
+    @PostMapping
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<Event> createEvent(@RequestBody Event event, Principal principal) {
+        String email = principal.getName(); // Extract email from JWT
+        User organizer = userService.getUserByEmail(email);
+
+        event.setOrganizer(organizer);
+        Event created = eventService.createEvent(event);
+        return ResponseEntity.ok(created);
+    }
+
+    /**
+     * Fetches all available events.
+     * 
+     * @return List of all events
+     */
+    @GetMapping
+    public List<Event> getAllEvents() {
+        return eventService.getAllEvents();
+    }
+
+    /**
+     * Fetches events created by a specific organizer.
+     * 
+     * @param id Organizer's user ID
+     * @return List of events by the organizer
+     */
+    @GetMapping("/organizer/{id}")
+    public List<Event> getByOrganizer(@PathVariable Long id) {
+        return eventService.getEventsByOrganizerId(id);
+    }
+
+    /**
+     * Deletes an event by ID. Only organizers can perform this action.
+     * 
+     * @param id ID of the event
+     * @return Success message
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<String> delete(@PathVariable Long id) {
+        eventService.deleteEvent(id);
+        return ResponseEntity.ok("Event deleted");
+    }
+}

@@ -1,0 +1,86 @@
+package com.example.demo.config;
+
+import com.example.demo.jwt.JwtAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+/**
+ * Configures Spring Security:
+ * - Disables CSRF
+ * - Adds JWT filter
+ * - Enables method-level authorization
+ * - Defines public vs protected endpoints
+ */
+@Configuration
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Autowired
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    /**
+     * Defines the main security filter chain.
+     */
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .cors()
+            .and .csrf().disable()
+            .disable() // ❌ CSRF disabled (enable for stateful apps with sessions)
+            .authorizeHttpRequests(auth -> auth
+                // ✅ Public access to login/register/otp-related
+                .requestMatchers(
+                    "/api/users/login",
+                    "/api/users/register",
+                    "/api/auth/**"
+                ).permitAll()
+
+                // ✅ Allow only GET requests to /api/events/**
+                .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
+
+                // ✅ Organizer-only access to POST and DELETE
+                .requestMatchers(HttpMethod.POST, "/api/events").hasRole("ORGANIZER")
+                .requestMatchers(HttpMethod.DELETE, "/api/events/**").hasRole("ORGANIZER")
+
+                // ✅ All other requests require authentication
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(sess -> sess
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class); // Inject JWT filter
+
+        return http.build();
+    }
+
+    /**
+     * Password encoder using BCrypt.
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Exposes AuthenticationManager bean if needed (e.g., for manual auth logic).
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+}
